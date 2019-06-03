@@ -1,0 +1,174 @@
+/*
+* Author: chernedm
+*
+* Copyright (C) 2019 chernedm@miamioh.edu
+*/
+
+#include <boost/asio.hpp>
+#include <iostream>
+#include <string>
+#include <sstream>
+#include <vector>
+#include <algorithm>
+#include <iomanip>
+#include <cctype>
+#include "Movie.h"
+
+// A couple of namespaces to streamline code
+using namespace std;
+using namespace boost::asio::ip;
+
+// Alias to a vector-of-strings
+using StrVec = std::vector<std::string>;
+
+/** Helper method to split a given string into separate words based on
+spaces.
+* Note that this method does the following 1 extra operations:
+* 2. Removes all commas (',') characters
+*/
+StrVec split(std::string str) {
+    // Change all ',' to spaces
+    std::replace(str.begin(), str.end(), ',', ' ');
+    // Now use a istringstream to extract words into a vector
+    std::istringstream is(str);
+    StrVec wordList;
+    std::string word;
+    while (is >> std::quoted(word)) {
+        wordList.push_back(word);
+    }
+    // Return the list of words back to the caller.
+    return wordList;
+}
+
+/** Helper method to find index of a given string in a given vector.
+*
+* @param[in] list The vector to search in
+* @param[in] word The word to search for.
+* @return This method returns index of the word in list, if found. Otherwise
+* it returns -1.
+*/
+int find(const StrVec& list, const std::string& word) {
+    for (size_t i = 0; (i < list.size()); i++) {
+        if (list[i] == word) {
+            return i; // word found
+        }
+    }
+    return -1; // word not found.
+}
+
+/**
+* Helper method to help obtain movie data from a given URL.
+*
+* This method first extracts the host and path from the specified URL.
+* It then connects to the server and send an HTTP GET request. It then
+* reads the response headers from the stream leaving the actual movie
+* data to be processed.
+*
+* @param url The HTTP URL to be processed by this method.
+*
+* @param client The BOOST TCP stream to be used/setup by this method.
+*/
+void setupDataStream(const std::string& url, tcp::iostream& client) {
+    // Get the host name and file path from the URL.
+    const size_t slashPos = url.find('/', 7);
+    const std::string host = url.substr(7, slashPos - 7);
+    const std::string path = url.substr(slashPos);
+    client.connect(host, "80");
+    client << "GET " << path << " HTTP/1.1\r\n"
+    << "Host: " << host << "\r\n"
+    << "Connection: Close\r\n\r\n";
+    // Skip over the HTTP response headers
+    std::string line;
+    while (std::getline(client, line) && (line != "\r") && !line.empty()) {}
+}
+
+/**
+* Convenience method to check if a movie is a match.
+*
+* @param movie The movie object to be checked.
+* @param col The column to be checked.
+* @param substr The substring to be searched for
+* @return This method returns true if the movie has column with specified
+* substring. Otherwise this method returns false.
+*/
+bool isMatch(const Movie& movie, const std::string& col,
+    const std::string& substr) {
+    return movie.getCol(col).find(substr) != std::string::npos;
+}
+
+/** Convenience method to print columns of a movie in the order
+specified.
+*
+* @param movie The movie to be printed.
+* @param cmd The full command containing list of columns to be printed.
+*/
+void print(const Movie& movie, const StrVec& cmd) {
+    // Print the columns in the specified order.
+    bool needDelim = false; // Need a space delimiter?
+    for (const auto& col : cmd) {
+        if (col == "from") {
+            break; // finished printing all the columns.
+        }
+        // Get value for the column.
+        const std::string value = movie.getCol(col);
+        if (!value.empty()) {
+            // Print space delimiter as needed.
+            if (needDelim) {
+                std::cout << " ";
+            }
+            // Print column with quotations if needed.
+            if ((col == "title") || (col == "genres")) {
+                std::cout << std::quoted(value);
+            } else {
+                std::cout << value;
+            }
+            needDelim = true;
+        }
+    }
+    std::cout << std::endl;
+}
+
+/**
+* Convenience method to process a select command and print matching
+* movie entries.
+*
+* @param cmd The set of words in the command to be processed.
+*/
+void process(const StrVec& cmd) {
+    // First process the URL and setup the input stream from server
+    tcp::iostream client;
+    setupDataStream(cmd.at(find(cmd, "from") + 1), client);
+    // Read and discard the first line
+    std::string header;
+    std::getline(client, header);
+
+    // Get the condition for printing the movie (if any)
+    int wherePos = find(cmd, "where");
+    // Now read and process each movie entry.
+    Movie movie;
+    while (client >> movie) {
+        if ((wherePos == -1) || isMatch(movie, cmd.at(wherePos + 1),
+        cmd.at(wherePos + 3))) {
+            // This movie matches. Print relevant columns
+            print(movie, cmd);
+        }
+    }
+}
+
+/*
+* The main method that repeatedly reads commands from the user and
+* processes each command.
+*/
+int main() {
+    std::string cmd;
+    while (cmd.find("exit") != 0) {
+        // Prompt and get query from the user.
+        std::cout << "query> ";
+        std::getline(std::cin, cmd);
+        if (cmd.find("exit") != 0) {
+            // Now split the command into a vector for convenient processing
+            process(split(cmd));
+        }
+    }
+    return 0;
+}
