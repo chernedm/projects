@@ -21,8 +21,7 @@ using namespace boost::asio::ip;
 // Alias to a vector-of-strings
 using StrVec = std::vector<std::string>;
 
-/** Helper method to split a given string into separate words based on
-spaces.
+/** Helper method to split a given string into separate words based on spaces.
 * Note that this method does the following 1 extra operations:
 * 2. Removes all commas (',') characters
 */
@@ -96,8 +95,7 @@ bool isMatch(const Movie& movie, const std::string& col,
     return movie.getCol(col).find(substr) != std::string::npos;
 }
 
-/** Convenience method to print columns of a movie in the order
-specified.
+/** Convenience method to print columns of a movie in the order specified.
 *
 * @param movie The movie to be printed.
 * @param cmd The full command containing list of columns to be printed.
