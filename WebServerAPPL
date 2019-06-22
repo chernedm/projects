@@ -45,6 +45,7 @@ int Server::getFileSize(const std::string& path) {
     }
     return -1;
 }
+
 void Server::send404(std::ostream& os, const std::string& path) {
     const std::string msg = "The following file was not found: " +
     path + "\n";
